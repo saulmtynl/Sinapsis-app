@@ -1,9 +1,10 @@
 import { create } from 'zustand'
 import * as auth from './lib/auth'
 import * as drive from './lib/driveClient'
-import type { GoogleAccountInfo, MapStateJson } from './types'
+import type { GoogleAccountInfo, MapStateBlock, MapStateJson, MapStateMedia } from './types'
 
 export type Screen = 'login' | 'maps-list' | 'map-detail'
+export type RecordableKind = 'audio' | 'video'
 
 export interface CloudMapSummary {
   driveFolderId: string
@@ -30,23 +31,43 @@ interface SinapsisStore {
   currentMap: LoadedMap | null
   mapLoading: boolean
   mapError: string | null
-  // Set when a fresh check right before opening a map finds a newer
-  // modifiedTime than what this screen last saw — see Milestone 9 spec §4
-  // ("comparar el modifiedTime de Drive... para evitar sobrescribir cambios
-  // hechos desde una PC sin que la PWA se entere"). Surfaced as a banner
-  // rather than silently reloading, so an in-progress edit is never discarded.
+  // See saveMap() below for how this gets set/cleared — a real two-sided
+  // conflict (edited here AND changed on Drive since we opened it) is
+  // surfaced for an explicit choice, never auto-resolved. Milestone 9
+  // spec §4.
   remoteChangedWarning: boolean
+
+  // True as soon as any local edit happens; only saveMap() clears it.
+  // Drives whether the save bar is active and (later) could gate a
+  // "discard changes?" prompt on navigation.
+  dirty: boolean
+  saving: boolean
+  saveError: string | null
 
   signIn: () => Promise<void>
   signOut: () => void
   loadMaps: () => Promise<void>
   openMap: (folder: CloudMapSummary) => Promise<void>
-  refreshCurrentMapMeta: () => Promise<void>
   backToList: () => void
+
+  updateNodeTitle: (nodeId: string, title: string) => void
+  updateBlockText: (blockId: string, textContent: string) => void
+  addTextBlock: (nodeId: string) => void
+  deleteBlock: (blockId: string) => void
+  addMediaBlock: (nodeId: string, kind: RecordableKind, blob: Blob, extension: string) => Promise<void>
+
+  saveMap: (opts?: { force?: boolean }) => Promise<void>
+  discardAndReload: () => Promise<void>
 }
 
 function stripIdSuffix(name: string): string {
   return name.replace(/\s*\([0-9a-f]{8}\)$/i, '')
+}
+
+function nextOrderIndex(blocks: MapStateBlock[], nodeId: string): number {
+  const forNode = blocks.filter((b) => b.nodeId === nodeId)
+  if (forNode.length === 0) return 0
+  return Math.max(...forNode.map((b) => b.orderIndex)) + 1
 }
 
 export const useStore = create<SinapsisStore>((set, get) => ({
@@ -63,6 +84,10 @@ export const useStore = create<SinapsisStore>((set, get) => ({
   mapError: null,
   remoteChangedWarning: false,
 
+  dirty: false,
+  saving: false,
+  saveError: null,
+
   signIn: async () => {
     set({ authError: null })
     try {
@@ -75,7 +100,7 @@ export const useStore = create<SinapsisStore>((set, get) => ({
 
   signOut: () => {
     auth.signOut()
-    set({ account: { connected: false, email: null }, screen: 'login', maps: [], currentMap: null })
+    set({ account: { connected: false, email: null }, screen: 'login', maps: [], currentMap: null, dirty: false })
   },
 
   loadMaps: async () => {
@@ -90,7 +115,7 @@ export const useStore = create<SinapsisStore>((set, get) => ({
   },
 
   openMap: async (folder) => {
-    set({ mapLoading: true, mapError: null, remoteChangedWarning: false })
+    set({ mapLoading: true, mapError: null, remoteChangedWarning: false, dirty: false, saveError: null })
     try {
       const { stateFileId, mediaFolderId } = await drive.findMapFiles(folder.driveFolderId)
       if (!stateFileId) throw new Error('Este mapa no tiene un estado válido en Drive todavía.')
@@ -116,16 +141,158 @@ export const useStore = create<SinapsisStore>((set, get) => ({
     }
   },
 
-  // Cheap metadata-only check, meant to be called right before a save so a
-  // stale edit never clobbers a change made from another device in between.
-  refreshCurrentMapMeta: async () => {
+  backToList: () => set({ screen: 'maps-list', currentMap: null, dirty: false }),
+
+  // ---------- local (in-memory) edits — nothing here touches Drive ----------
+
+  updateNodeTitle: (nodeId, title) => {
     const current = get().currentMap
     if (!current) return
-    const meta = await drive.getFileMetadata(current.stateFileId)
-    if (meta && meta.modifiedTime !== current.remoteModifiedTime) {
-      set({ remoteChangedWarning: true })
+    const now = new Date().toISOString()
+    set({
+      currentMap: {
+        ...current,
+        state: {
+          ...current.state,
+          nodes: current.state.nodes.map((n) => (n.id === nodeId ? { ...n, title, updatedAt: now } : n))
+        }
+      },
+      dirty: true
+    })
+  },
+
+  updateBlockText: (blockId, textContent) => {
+    const current = get().currentMap
+    if (!current) return
+    set({
+      currentMap: {
+        ...current,
+        state: {
+          ...current.state,
+          blocks: current.state.blocks.map((b) => (b.id === blockId ? { ...b, textContent } : b))
+        }
+      },
+      dirty: true
+    })
+  },
+
+  addTextBlock: (nodeId) => {
+    const current = get().currentMap
+    if (!current) return
+    const block: MapStateBlock = {
+      id: crypto.randomUUID(),
+      nodeId,
+      type: 'text',
+      orderIndex: nextOrderIndex(current.state.blocks, nodeId),
+      textContent: '',
+      mediaId: null,
+      createdAt: new Date().toISOString()
+    }
+    set({
+      currentMap: { ...current, state: { ...current.state, blocks: [...current.state.blocks, block] } },
+      dirty: true
+    })
+  },
+
+  deleteBlock: (blockId) => {
+    const current = get().currentMap
+    if (!current) return
+    set({
+      currentMap: {
+        ...current,
+        state: { ...current.state, blocks: current.state.blocks.filter((b) => b.id !== blockId) }
+      },
+      dirty: true
+    })
+  },
+
+  // Uploads the binary to Drive right away (same eager-media-upload order as
+  // desktop's uploadPendingMedia before uploadMap) so a re-recording after a
+  // reload never re-uploads a duplicate — only the state.json write, which
+  // references it, is deferred to the explicit Guardar.
+  addMediaBlock: async (nodeId, kind, blob, extension) => {
+    const current = get().currentMap
+    if (!current) throw new Error('No hay ningún mapa abierto.')
+    if (!current.mediaFolderId) throw new Error('Este mapa no tiene una subcarpeta de media en Drive.')
+
+    const filename = `grabacion-${new Date().toISOString().replace(/[:.]/g, '-')}.${extension}`
+    const driveFileId = await drive.uploadFile(current.mediaFolderId, blob, filename)
+
+    const now = new Date().toISOString()
+    const media: MapStateMedia = {
+      id: crypto.randomUUID(),
+      nodeId,
+      type: kind,
+      originalFilename: filename,
+      canvasX: null,
+      canvasY: null,
+      createdAt: now,
+      driveFileId
+    }
+    const block: MapStateBlock = {
+      id: crypto.randomUUID(),
+      nodeId,
+      type: kind,
+      orderIndex: nextOrderIndex(current.state.blocks, nodeId),
+      textContent: null,
+      mediaId: media.id,
+      createdAt: now
+    }
+
+    // Re-read currentMap in case something else changed it while the
+    // upload was in flight (uploadFile can take a while for video).
+    const latest = get().currentMap
+    if (!latest) return
+    set({
+      currentMap: {
+        ...latest,
+        state: {
+          ...latest.state,
+          media: [...latest.state.media, media],
+          blocks: [...latest.state.blocks, block]
+        }
+      },
+      dirty: true
+    })
+  },
+
+  // ---------- save to Drive ----------
+
+  saveMap: async (opts) => {
+    const current = get().currentMap
+    if (!current) return
+    set({ saving: true, saveError: null })
+    try {
+      if (!opts?.force) {
+        const meta = await drive.getFileMetadata(current.stateFileId)
+        if (meta && meta.modifiedTime !== current.remoteModifiedTime) {
+          set({ saving: false, remoteChangedWarning: true })
+          return
+        }
+      }
+
+      const uploaded = await drive.uploadJson(
+        current.driveFolderId,
+        'state.json',
+        current.state,
+        current.stateFileId
+      )
+      set({
+        currentMap: { ...current, stateFileId: uploaded.fileId, remoteModifiedTime: uploaded.modifiedTime },
+        dirty: false,
+        saving: false,
+        remoteChangedWarning: false
+      })
+    } catch (err) {
+      set({ saving: false, saveError: err instanceof Error ? err.message : String(err) })
     }
   },
 
-  backToList: () => set({ screen: 'maps-list', currentMap: null })
+  // The "descartar mis cambios" side of the conflict prompt: throws away
+  // local edits and re-downloads the current remote state.json.
+  discardAndReload: async () => {
+    const current = get().currentMap
+    if (!current) return
+    await get().openMap({ driveFolderId: current.driveFolderId, title: '' })
+  }
 }))

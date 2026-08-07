@@ -289,7 +289,142 @@ button {
   padding: 10px 12px;
 }
 
-.document-item h3 {
+.document-item h3,
+.document-item h4 {
   margin: 0 0 4px;
   font-size: 0.95rem;
+}
+
+/* ---------- editing ---------- */
+
+.node-title-input {
+  width: 100%;
+  font-size: 1.1rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: 6px 8px;
+  margin-bottom: 12px;
+  background: transparent;
+  color: var(--text);
+}
+
+.node-title-input:focus {
+  border-color: var(--accent);
+  outline: none;
+  background: var(--panel-bg);
+}
+
+.block-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.block-textarea {
+  flex: 1;
+  font: inherit;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px;
+  resize: vertical;
+}
+
+.block-delete {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  padding: 4px 8px;
+  color: var(--danger);
+  border-color: var(--danger-soft);
+}
+
+.node-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.block-media-player {
+  max-width: 100%;
+  border-radius: var(--radius);
+}
+
+audio.block-media-player {
+  width: 100%;
+}
+
+/* ---------- save bar / conflict ---------- */
+
+.save-bar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 10px 14px;
+  margin-bottom: 16px;
+}
+
+.conflict-box {
+  border: 1px solid var(--warning);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.conflict-box .warning-text {
+  margin: 0 0 10px;
+}
+
+.conflict-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ---------- recorder ---------- */
+
+.record-button {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.recorder-active,
+.recorder-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  width: 100%;
+}
+
+.recorder-timer {
+  margin: 0;
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.recorder-live {
+  width: 100%;
+  max-height: 260px;
+  border-radius: var(--radius);
+  background: #000;
+}
+
+.recorder-actions {
+  display: flex;
+  gap: 8px;
 }
