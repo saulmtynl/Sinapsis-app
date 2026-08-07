@@ -1,0 +1,117 @@
+# Formato de sincronización con Google Drive (heredado del Milestone 8, app de escritorio)
+
+Referencia extraída tal cual de `Sinapsis/src/main/sync/` (commit `cffa2a7`,
+"Milestone 8: sincronizacion multi-dispositivo via Google Drive"). La PWA
+(Milestone 9) debe leer y escribir este mismo formato — no inventar uno nuevo.
+
+## Estructura en Drive
+
+```
+Sinapsis/                          (carpeta raíz, una por cuenta de Google)
+  <título del mapa> (<id-corto>)/  (una carpeta por mapa, id = primeros 8 chars del uuid)
+    state.json                     (árbol completo del mapa)
+    media/                         (subcarpeta con los binarios: audio, video, imágenes)
+```
+
+- La carpeta raíz `Sinapsis` se busca/crea por nombre bajo `root` en el Drive del usuario.
+- El nombre de cada carpeta de mapa es `"<título saneado, máx 120 chars> (<primeros 8 chars del id>)"`,
+  para que dos mapas con el mismo título no choquen.
+
+## `state.json` — wire format
+
+```ts
+interface MapStateJson {
+  version: 1
+  mapId: string
+  nodes: Array<{
+    id: string
+    parentId: string | null
+    title: string
+    type: string
+    orderIndex: number
+    createdAt: string
+    updatedAt: string
+  }>
+  blocks: Array<{
+    id: string
+    nodeId: string
+    type: string
+    orderIndex: number
+    textContent: string | null
+    mediaId: string | null
+    createdAt: string
+  }>
+  documents: Array<{
+    id: string
+    nodeId: string
+    title: string
+    content: string
+    source: string
+    wordCount: number
+    createdAt: string
+    updatedAt: string
+  }>
+  media: Array<{
+    id: string
+    nodeId: string
+    type: string
+    originalFilename: string
+    canvasX: number | null
+    canvasY: number | null
+    createdAt: string
+    driveFileId: string | null   // referencia al archivo real, subido aparte a media/
+  }>
+}
+```
+
+Notas de cada array:
+
+- **nodes**: el árbol del mapa. El nodo raíz (el mapa mismo) tiene `parentId: null`.
+  `type` distingue tema base / exponente / subtema, etc. (mismos valores que usa escritorio).
+- **blocks**: los bloques tipo chat dentro de cada nodo (texto, referencia a audio/video/imagen
+  vía `mediaId`). `textContent` es null en bloques de solo media.
+- **documents**: la pestaña de Documentos (Milestone 7) — contenido largo tipo guion/artículo.
+- **media**: metadata de cada archivo binario. El archivo real vive en la subcarpeta `media/`
+  de Drive; `driveFileId` es el id de ese archivo. Si `driveFileId` es `null`, el archivo
+  todavía no se subió (pendiente).
+
+## Mecánica que debe replicarse (no solo el shape del JSON)
+
+1. **Binarios fuera del JSON.** Los archivos de audio/video/imagen se suben sueltos a la
+   subcarpeta `media/` (upload resumable en escritorio; en la PWA puede ser simple porque los
+   archivos grabados desde el navegador son más chicos, pero el patrón de "subir el binario
+   primero, luego escribir su `driveFileId` en el array `media` del JSON" debe mantenerse).
+
+2. **`version: 1` fijo.** Permite evolucionar el schema a futuro. La PWA debe escribir
+   `version: 1` también, y puede usarlo para detectar si algún día aparece un `state.json`
+   con un formato más nuevo que no sepa leer.
+
+3. **Reemplazo todo-o-nada al descargar.** Escritorio no hace merge campo a campo: al bajar
+   un `state.json`, borra el subtree local completo y lo reinserta desde cero. La PWA no tiene
+   base de datos local persistente (todo viene de Drive en cada sesión), así que esto aplica
+   menos, pero es relevante para la subida: si el usuario edita un mapa en la PWA, debe subir
+   el árbol completo actualizado, no un diff.
+
+4. **Detección de conflicto vía `modifiedTime` de Drive, nunca el reloj local.** Antes de
+   sobrescribir, comparar el `modifiedTime` que devuelve la Drive API contra el último
+   `modifiedTime` visto por esta sesión — igual que hace escritorio en `mapSync.ts`
+   (`syncMapNow`). Esto evita problemas de desfase de reloj entre el celular y la PC.
+   Ver sección 4 del brief del Milestone 9: "antes de cargar un mapa, comparar el
+   `modifiedTime` de Drive contra la última versión vista".
+
+5. **Subida como `multipart/related`.** El `state.json` es texto chico, así que un solo
+   POST/PATCH multipart (metadata + contenido JSON) alcanza — no hace falta el protocolo
+   resumable que sí se usa para los archivos de media.
+
+## Dónde está el código fuente original (para consulta, no para copiar tal cual — es Node/Electron)
+
+- `Sinapsis/src/main/sync/mapSync.ts` — arma y parsea el `MapStateJson` (`exportMapState` /
+  `importMapState`), y la lógica de decisión de sync (`syncMapNow`: upload / download / conflict).
+- `Sinapsis/src/main/sync/driveClient.ts` — llamadas crudas a la API de Drive v3 (`uploadJson`,
+  `downloadJson`, `getFileMetadata`, `uploadFile` resumable, `createMapFolder`, `listMapFolders`).
+- `Sinapsis/src/main/sync/googleAuth.ts` — auth de escritorio (OAuth con client secret,
+  loopback local). **No aplica a la PWA** — Milestone 9 usa Google Identity Services
+  (token client, sin secret) en su lugar; solo el scope (`drive.file`) se reutiliza igual.
+- `Sinapsis/src/main/sync/engine.ts` — el tick de sync automático cada 15s. Tampoco aplica
+  tal cual a la PWA (guardado explícito/on-blur en vez de polling en background), pero sirve
+  de referencia para el patrón de "un tick a la vez, nunca en paralelo".

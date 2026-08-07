@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#6366f1" />
+    <link rel="icon" type="image/svg+xml" href="./icons/icon-192.svg" />
+    <link rel="apple-touch-icon" href="./icons/icon-192.svg" />
+    <title>Sinapsis</title>
+    <!-- Google Identity Services: token-client flow, client-id only, no
+         client secret anywhere in this app. See docs/drive-sync-format.md
+         and README.md for why this replaces desktop's OAuth+secret flow. -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
