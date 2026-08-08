@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useInboxStore } from '../inboxStore'
 import { InboxRecordButton } from '../components/InboxRecordButton'
+import { InboxCameraButton } from '../components/InboxCameraButton'
 import { OrganizeSheet } from '../components/OrganizeSheet'
 import type { InboxItem } from '../types'
 
@@ -68,6 +69,7 @@ export function InboxScreen(): React.JSX.Element {
 
       <div className="capture-record">
         <InboxRecordButton />
+        <InboxCameraButton />
       </div>
 
       {error && <p className="error-text">{error}</p>}
