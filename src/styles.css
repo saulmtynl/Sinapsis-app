@@ -492,6 +492,77 @@ audio.block-media-player {
   font-size: 0.8rem;
 }
 
+/* ---------- organize sheet ---------- */
+
+.organize-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  justify-content: center;
+  overflow-y: auto;
+}
+
+.organize-sheet {
+  background: var(--bg);
+  width: 100%;
+  max-width: 640px;
+  min-height: 100%;
+  padding: 16px;
+}
+
+.organize-step {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.organize-step-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.organize-selected-node {
+  margin: 0;
+}
+
+.organize-new-node {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 10px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+}
+
+.organize-new-node input {
+  flex: 1;
+  min-width: 160px;
+  font: inherit;
+  color: var(--text);
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px;
+}
+
+.organize-new-node select {
+  font: inherit;
+  color: var(--text);
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px;
+}
+
+.organize-confirm {
+  align-self: flex-start;
+}
+
 /* ---------- recorder ---------- */
 
 .record-button {

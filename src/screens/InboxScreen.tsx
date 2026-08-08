@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useInboxStore } from '../inboxStore'
 import { InboxRecordButton } from '../components/InboxRecordButton'
+import { OrganizeSheet } from '../components/OrganizeSheet'
 import type { InboxItem } from '../types'
 
 const DATE_FORMAT = new Intl.DateTimeFormat('es', {
@@ -19,6 +20,8 @@ export function InboxScreen(): React.JSX.Element {
 
   const [draft, setDraft] = useState('')
   const [saving, setSaving] = useState(false)
+  const [organizingItem, setOrganizingItem] = useState<InboxItem | null>(null)
+  const [justOrganized, setJustOrganized] = useState(false)
 
   useEffect(() => {
     void loadItems()
@@ -34,6 +37,12 @@ export function InboxScreen(): React.JSX.Element {
     } finally {
       setSaving(false)
     }
+  }
+
+  function handleOrganized(): void {
+    setOrganizingItem(null)
+    setJustOrganized(true)
+    setTimeout(() => setJustOrganized(false), 3000)
   }
 
   return (
@@ -63,6 +72,7 @@ export function InboxScreen(): React.JSX.Element {
 
       {error && <p className="error-text">{error}</p>}
       {loading && <p className="text-muted">Cargando…</p>}
+      {justOrganized && <p className="text-muted">Listo, quedó organizado en el mapa. ✓</p>}
 
       {!loading && items.length === 0 && (
         <p className="text-muted">No hay nada pendiente todavía. Lo que anotes acá se guarda al toque, sin elegir dónde va.</p>
@@ -70,14 +80,22 @@ export function InboxScreen(): React.JSX.Element {
 
       <ul className="inbox-list">
         {items.map((item) => (
-          <InboxItemRow key={item.id} item={item} />
+          <InboxItemRow key={item.id} item={item} onOrganize={() => setOrganizingItem(item)} />
         ))}
       </ul>
+
+      {organizingItem && (
+        <OrganizeSheet
+          item={organizingItem}
+          onClose={() => setOrganizingItem(null)}
+          onOrganized={handleOrganized}
+        />
+      )}
     </div>
   )
 }
 
-function InboxItemRow({ item }: { item: InboxItem }): React.JSX.Element {
+function InboxItemRow({ item, onOrganize }: { item: InboxItem; onOrganize: () => void }): React.JSX.Element {
   const [mediaUrl, setMediaUrl] = useState<string | null>(null)
 
   useEffect(() => {
@@ -96,7 +114,7 @@ function InboxItemRow({ item }: { item: InboxItem }): React.JSX.Element {
       </div>
       <div className="inbox-item-meta">
         <span className="text-muted">{DATE_FORMAT.format(new Date(item.createdAt))}</span>
-        <button type="button" className="btn-ghost" disabled title="Disponible en el próximo paso del milestone">
+        <button type="button" className="btn-ghost" onClick={onOrganize}>
           Organizar
         </button>
       </div>

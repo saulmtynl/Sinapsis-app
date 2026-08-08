@@ -1,11 +1,15 @@
 import { create } from 'zustand'
 import * as auth from './lib/auth'
 import * as drive from './lib/driveClient'
-import type { GoogleAccountInfo, MapStateBlock, MapStateJson, MapStateMedia } from './types'
+import type { GoogleAccountInfo, MapStateBlock, MapStateJson, MapStateMedia, MapStateNode } from './types'
 
 export type Screen = 'login' | 'maps-list' | 'map-detail'
 export type Tab = 'inbox' | 'mapas'
 export type RecordableKind = 'audio' | 'video'
+// addMediaBlock also accepts 'image' (Inbox photos, Milestone 2 Paso 4/6) —
+// kept separate from RecordableKind since you don't "record" a photo, only
+// the map-node recorder UI (components/RecordButton.tsx) is audio/video.
+export type BlockMediaKind = RecordableKind | 'image'
 
 export interface CloudMapSummary {
   driveFolderId: string
@@ -55,10 +59,11 @@ interface SinapsisStore {
   backToList: () => void
 
   updateNodeTitle: (nodeId: string, title: string) => void
+  addNode: (parentId: string, title: string, type: string) => string | null
   updateBlockText: (blockId: string, textContent: string) => void
-  addTextBlock: (nodeId: string) => void
+  addTextBlock: (nodeId: string, initialText?: string) => string | null
   deleteBlock: (blockId: string) => void
-  addMediaBlock: (nodeId: string, kind: RecordableKind, blob: Blob, extension: string) => Promise<void>
+  addMediaBlock: (nodeId: string, kind: BlockMediaKind, blob: Blob, extension: string) => Promise<void>
 
   saveMap: (opts?: { force?: boolean }) => Promise<void>
   discardAndReload: () => Promise<void>
@@ -66,6 +71,12 @@ interface SinapsisStore {
 
 function stripIdSuffix(name: string): string {
   return name.replace(/\s*\([0-9a-f]{8}\)$/i, '')
+}
+
+function nextNodeOrderIndex(nodes: MapStateNode[], parentId: string): number {
+  const siblings = nodes.filter((n) => n.parentId === parentId)
+  if (siblings.length === 0) return 0
+  return Math.max(...siblings.map((n) => n.orderIndex)) + 1
 }
 
 function nextOrderIndex(blocks: MapStateBlock[], nodeId: string): number {
@@ -172,6 +183,26 @@ export const useStore = create<SinapsisStore>((set, get) => ({
     })
   },
 
+  addNode: (parentId, title, type) => {
+    const current = get().currentMap
+    if (!current) return null
+    const now = new Date().toISOString()
+    const node: MapStateNode = {
+      id: crypto.randomUUID(),
+      parentId,
+      title,
+      type,
+      orderIndex: nextNodeOrderIndex(current.state.nodes, parentId),
+      createdAt: now,
+      updatedAt: now
+    }
+    set({
+      currentMap: { ...current, state: { ...current.state, nodes: [...current.state.nodes, node] } },
+      dirty: true
+    })
+    return node.id
+  },
+
   updateBlockText: (blockId, textContent) => {
     const current = get().currentMap
     if (!current) return
@@ -187,15 +218,15 @@ export const useStore = create<SinapsisStore>((set, get) => ({
     })
   },
 
-  addTextBlock: (nodeId) => {
+  addTextBlock: (nodeId, initialText = '') => {
     const current = get().currentMap
-    if (!current) return
+    if (!current) return null
     const block: MapStateBlock = {
       id: crypto.randomUUID(),
       nodeId,
       type: 'text',
       orderIndex: nextOrderIndex(current.state.blocks, nodeId),
-      textContent: '',
+      textContent: initialText,
       mediaId: null,
       createdAt: new Date().toISOString()
     }
@@ -203,6 +234,7 @@ export const useStore = create<SinapsisStore>((set, get) => ({
       currentMap: { ...current, state: { ...current.state, blocks: [...current.state.blocks, block] } },
       dirty: true
     })
+    return block.id
   },
 
   deleteBlock: (blockId) => {
