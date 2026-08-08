@@ -1,8 +1,11 @@
 // Port of Sinapsis/src/main/scripts.ts (Milestone 6/7) to work off the
 // PWA's in-memory MapStateJson arrays instead of SQLite queries. Same
-// subtree-walk, same hasContent gate, same prompt — do not edit
-// SCRIPT_SYSTEM_PROMPT independently of desktop's copy, it was reviewed
-// and approved with the user there.
+// subtree-walk, same hasContent gate, same prompt as desktop's original —
+// with one deliberate divergence: the Spanish-variant rule below (added in
+// PWA Milestone 3, per user request) isn't in desktop's copy. Scope for
+// that milestone was PWA-only, so desktop's prompt was left untouched;
+// port this rule there too if the user wants the same output style on
+// both platforms.
 import type { MapStateJson, MapStateNode } from '../types'
 import { generateAnthropicText } from './ai'
 
@@ -23,7 +26,9 @@ micrófono.
 Reglas:
 - Respetá la jerarquía del árbol: el tema base es el hilo conductor de todo el guion — todo
   debe volver a él. Los exponentes y subtemas son el desarrollo, en el orden en que aparecen.
-- Escribí en el mismo idioma en el que está el contenido del árbol.
+- Escribí en el mismo idioma en el que está el contenido del árbol. Si ese idioma es
+  español, usá español latinoamericano neutro (con "tú"), nunca español de España — evitá
+  "vosotros" y modismos marcadamente peninsulares (ej. "vale", "tío", "currar").
 - Empezá con un gancho breve que enganche a la audiencia en los primeros segundos, y cerrá
   con una conclusión o llamado a la acción natural — aunque esas partes no estén literalmente
   en el árbol, son parte de armar un guion real.

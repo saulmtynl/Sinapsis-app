@@ -6,7 +6,12 @@ import { RecordButton } from '../components/RecordButton'
 import { generateScriptForNode, hasGeneratableContent } from '../lib/scriptGeneration'
 
 function downloadTextFile(filename: string, content: string): void {
-  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
+  // Leading BOM: a .txt has no encoding metadata of its own, and several
+  // Android text/notes apps fall back to Latin-1 without one — garbling
+  // tildes/ñ even though the file is valid UTF-8 (the Blob constructor
+  // encodes JS strings as UTF-8). The BOM gives them something to detect.
+  const utf8Bom = String.fromCharCode(0xfeff)
+  const blob = new Blob([utf8Bom, content], { type: 'text/plain;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
