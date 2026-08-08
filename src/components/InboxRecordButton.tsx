@@ -29,9 +29,12 @@ export function InboxRecordButton(): React.JSX.Element {
     return () => URL.revokeObjectURL(url)
   }, [blob])
 
-  function handleStart(): void {
+  async function handleStart(): Promise<void> {
     setSaveError(null)
-    void start('audio')
+    // Sequenced, not concurrent: let the recorder's getUserMedia settle
+    // first, then start recognition — avoids both racing for the mic
+    // permission prompt on first use.
+    await start('audio')
     speech.start()
   }
 
@@ -70,7 +73,7 @@ export function InboxRecordButton(): React.JSX.Element {
   if (status === 'idle') {
     return (
       <div className="record-button">
-        <button type="button" className="btn-ghost" onClick={handleStart}>
+        <button type="button" className="btn-ghost" onClick={() => void handleStart()}>
           🎙️ Grabar nota de voz
         </button>
         {error && <p className="error-text">{error}</p>}
@@ -87,6 +90,7 @@ export function InboxRecordButton(): React.JSX.Element {
       <div className="recorder-active">
         <p className="recorder-timer">● Grabando… {elapsedSeconds}s</p>
         {speech.available && speech.transcript && <p className="text-muted recorder-live-transcript">{speech.transcript}</p>}
+        {speech.lastError && <p className="text-muted">(diagnóstico transcripción: {speech.lastError})</p>}
         <button type="button" className="btn-primary" onClick={handleStop}>
           Detener
         </button>
@@ -107,6 +111,7 @@ export function InboxRecordButton(): React.JSX.Element {
       ) : (
         <p className="text-muted">Este navegador no soporta transcripción automática — se guarda solo el audio.</p>
       )}
+      {speech.lastError && <p className="text-muted">(diagnóstico transcripción: {speech.lastError})</p>}
       {saveError && <p className="error-text">{saveError}</p>}
       <div className="recorder-actions">
         <button type="button" className="btn-primary" disabled={saving} onClick={() => void confirm()}>

@@ -3,6 +3,11 @@ import { useCallback, useRef, useState } from 'react'
 interface UseSpeechTranscriptionResult {
   available: boolean
   transcript: string
+  // Exposed (not swallowed) so the UI can show *why* a transcript didn't
+  // show up — e.g. "not-allowed", "no-speech", "audio-capture" — instead of
+  // a generic "not available", which is otherwise impossible to diagnose
+  // on a device that isn't in front of you.
+  lastError: string | null
   start: () => void
   stop: () => void
   reset: () => void
@@ -17,13 +22,22 @@ export function useSpeechTranscription(): UseSpeechTranscriptionResult {
   const available = !!Ctor
 
   const [transcript, setTranscript] = useState('')
+  const [lastError, setLastError] = useState<string | null>(null)
   const recognitionRef = useRef<SpeechRecognition | null>(null)
   const finalTextRef = useRef('')
+  // Distinguishes an intentional stop() from Chrome-on-Android's
+  // SpeechRecognition ending on its own (it does this often — a short
+  // silence, or an internal time limit — even with continuous: true).
+  // While this is true, an unexpected onend restarts recognition instead
+  // of letting the transcript go silent for the rest of the recording.
+  const listeningRef = useRef(false)
 
   const start = useCallback(() => {
     if (!Ctor) return
     finalTextRef.current = ''
     setTranscript('')
+    setLastError(null)
+    listeningRef.current = true
 
     const recognition = new Ctor()
     recognition.lang = navigator.language || 'es-ES'
@@ -38,25 +52,37 @@ export function useSpeechTranscription(): UseSpeechTranscriptionResult {
       }
       setTranscript(`${finalTextRef.current}${interim}`.trim())
     }
-    // Best-effort: swallow errors (e.g. "no-speech", "aborted") rather than
-    // surfacing them — the recording itself is unaffected either way.
-    recognition.onerror = () => {}
+    recognition.onerror = (event) => {
+      setLastError(event.error)
+    }
+    recognition.onend = () => {
+      if (listeningRef.current && recognitionRef.current === recognition) {
+        try {
+          recognition.start()
+        } catch {
+          // Already starting/started somehow — ignore, next onend retries.
+        }
+      }
+    }
 
     recognitionRef.current = recognition
     recognition.start()
   }, [Ctor])
 
   const stop = useCallback(() => {
+    listeningRef.current = false
     recognitionRef.current?.stop()
     recognitionRef.current = null
   }, [])
 
   const reset = useCallback(() => {
+    listeningRef.current = false
     recognitionRef.current?.abort()
     recognitionRef.current = null
     finalTextRef.current = ''
     setTranscript('')
+    setLastError(null)
   }, [])
 
-  return { available, transcript, start, stop, reset }
+  return { available, transcript, lastError, start, stop, reset }
 }
