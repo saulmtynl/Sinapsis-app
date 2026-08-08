@@ -66,3 +66,19 @@ export interface GoogleAccountInfo {
   connected: boolean
   email: string | null
 }
+
+// ---------- Inbox (Milestone 2) — local-only staging area, never part of
+// the Drive wire format above. Items live in IndexedDB until "Organizar"
+// turns one into a real node/block in a map.
+
+export type InboxItemKind = 'text' | 'audio' | 'image'
+
+export interface InboxItem {
+  id: string
+  kind: InboxItemKind
+  textContent: string | null
+  blob: Blob | null
+  mimeType: string | null
+  transcriptStatus: 'none' | 'pending' | 'done' | 'unavailable'
+  createdAt: string
+}

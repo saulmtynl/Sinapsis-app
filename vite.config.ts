@@ -7,6 +7,13 @@ import { VitePWA } from 'vite-plugin-pwa'
 // site's /<repo>/ subpath — no repo name needs to be hardcoded here.
 export default defineConfig({
   base: './',
+  // Allows testing the dev server from a phone via a tunnel (localtunnel,
+  // ngrok, etc.) during development — Vite blocks unrecognized Host headers
+  // by default. Dev-server-only setting; doesn't affect the production
+  // build served from GitHub Pages.
+  server: {
+    allowedHosts: ['.loca.lt']
+  },
   plugins: [
     react(),
     VitePWA({

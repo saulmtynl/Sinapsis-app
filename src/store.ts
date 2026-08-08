@@ -4,6 +4,7 @@ import * as drive from './lib/driveClient'
 import type { GoogleAccountInfo, MapStateBlock, MapStateJson, MapStateMedia } from './types'
 
 export type Screen = 'login' | 'maps-list' | 'map-detail'
+export type Tab = 'inbox' | 'mapas'
 export type RecordableKind = 'audio' | 'video'
 
 export interface CloudMapSummary {
@@ -20,6 +21,9 @@ interface LoadedMap {
 }
 
 interface SinapsisStore {
+  tab: Tab
+  setTab: (tab: Tab) => void
+
   screen: Screen
   account: GoogleAccountInfo
   authError: string | null
@@ -71,6 +75,13 @@ function nextOrderIndex(blocks: MapStateBlock[], nodeId: string): number {
 }
 
 export const useStore = create<SinapsisStore>((set, get) => ({
+  // Always starts on the Inbox tab (Milestone 2) — capturing a quick note
+  // must never require signing in first. `screen` below only governs what
+  // shows inside the "Mapas" tab, which is the one thing that still needs
+  // a Google session.
+  tab: 'inbox',
+  setTab: (tab) => set({ tab }),
+
   screen: auth.getGoogleAccount().connected ? 'maps-list' : 'login',
   account: auth.getGoogleAccount(),
   authError: null,
