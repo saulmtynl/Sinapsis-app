@@ -9,7 +9,12 @@ interface InboxStore {
 
   loadItems: () => Promise<void>
   addTextItem: (text: string) => Promise<void>
-  addMediaItem: (kind: InboxItemKind, blob: Blob, mimeType: string) => Promise<void>
+  addMediaItem: (
+    kind: InboxItemKind,
+    blob: Blob,
+    mimeType: string,
+    opts?: { textContent?: string | null; transcriptStatus?: InboxItem['transcriptStatus'] }
+  ) => Promise<void>
   updateItemText: (id: string, text: string) => Promise<void>
   removeItem: (id: string) => Promise<void>
 }
@@ -47,14 +52,14 @@ export const useInboxStore = create<InboxStore>((set, get) => ({
     set({ items: sortByNewestFirst([...get().items, item]) })
   },
 
-  addMediaItem: async (kind, blob, mimeType) => {
+  addMediaItem: async (kind, blob, mimeType, opts) => {
     const item: InboxItem = {
       id: crypto.randomUUID(),
       kind,
-      textContent: null,
+      textContent: opts?.textContent ?? null,
       blob,
       mimeType,
-      transcriptStatus: 'none',
+      transcriptStatus: opts?.transcriptStatus ?? 'none',
       createdAt: new Date().toISOString()
     }
     await inboxDb.putInboxItem(item)

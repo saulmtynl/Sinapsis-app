@@ -100,6 +100,12 @@ export function OrganizeSheet({ item, onClose, onOrganized }: OrganizeSheetProps
       } else {
         if (!item.blob) throw new Error('Este ítem no tiene contenido para asignar.')
         await addMediaBlock(selectedNodeId, item.kind, item.blob, extensionForItem(item))
+        // Carry over the transcript (audio) as its own text block so it's
+        // not lost once the item leaves the inbox — the media block alone
+        // doesn't hold it.
+        if (item.kind === 'audio' && item.textContent?.trim()) {
+          addTextBlock(selectedNodeId, item.textContent.trim())
+        }
       }
       setContentAttached(true)
       await saveMap()

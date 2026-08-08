@@ -99,6 +99,7 @@ export function InboxScreen(): React.JSX.Element {
 
 function InboxItemRow({ item, onOrganize }: { item: InboxItem; onOrganize: () => void }): React.JSX.Element {
   const [mediaUrl, setMediaUrl] = useState<string | null>(null)
+  const updateItemText = useInboxStore((s) => s.updateItemText)
 
   useEffect(() => {
     if (!item.blob) return
@@ -113,6 +114,18 @@ function InboxItemRow({ item, onOrganize }: { item: InboxItem; onOrganize: () =>
         {item.kind === 'text' && <p>{item.textContent}</p>}
         {item.kind === 'audio' && mediaUrl && <audio src={mediaUrl} controls className="block-media-player" />}
         {item.kind === 'image' && mediaUrl && <img src={mediaUrl} alt="" className="block-media-player" />}
+        {item.kind === 'audio' &&
+          (item.textContent !== null ? (
+            <textarea
+              className="block-textarea inbox-transcript"
+              value={item.textContent}
+              onChange={(e) => void updateItemText(item.id, e.target.value)}
+              placeholder="Transcripción…"
+              rows={2}
+            />
+          ) : (
+            <p className="text-muted">Sin transcripción disponible para esta nota.</p>
+          ))}
       </div>
       <div className="inbox-item-meta">
         <span className="text-muted">{DATE_FORMAT.format(new Date(item.createdAt))}</span>
