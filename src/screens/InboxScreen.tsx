@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useInboxStore } from '../inboxStore'
+import { InboxRecordButton } from '../components/InboxRecordButton'
 import type { InboxItem } from '../types'
 
 const DATE_FORMAT = new Intl.DateTimeFormat('es', {
@@ -54,6 +55,10 @@ export function InboxScreen(): React.JSX.Element {
             {saving ? 'Guardando…' : 'Guardar'}
           </button>
         </div>
+      </div>
+
+      <div className="capture-record">
+        <InboxRecordButton />
       </div>
 
       {error && <p className="error-text">{error}</p>}

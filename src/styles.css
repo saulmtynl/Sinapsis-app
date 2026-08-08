@@ -458,6 +458,10 @@ audio.block-media-player {
   justify-content: flex-end;
 }
 
+.capture-record {
+  margin-bottom: 16px;
+}
+
 .inbox-list {
   list-style: none;
   margin: 0;
