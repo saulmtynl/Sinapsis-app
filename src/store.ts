@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import * as auth from './lib/auth'
 import * as drive from './lib/driveClient'
-import type { GoogleAccountInfo, MapStateBlock, MapStateJson, MapStateMedia, MapStateNode } from './types'
+import type { GoogleAccountInfo, MapStateBlock, MapStateDocument, MapStateJson, MapStateMedia, MapStateNode } from './types'
 
 export type Screen = 'login' | 'maps-list' | 'map-detail'
 export type Tab = 'inbox' | 'mapas'
@@ -64,6 +64,11 @@ interface SinapsisStore {
   addTextBlock: (nodeId: string, initialText?: string) => string | null
   deleteBlock: (blockId: string) => void
   addMediaBlock: (nodeId: string, kind: BlockMediaKind, blob: Blob, extension: string) => Promise<void>
+  moveBlockUp: (blockId: string) => void
+  moveBlockDown: (blockId: string) => void
+
+  addDocument: (nodeId: string, title: string, content: string, source: string) => string | null
+  updateDocumentContent: (documentId: string, content: string) => void
 
   saveMap: (opts?: { force?: boolean }) => Promise<void>
   discardAndReload: () => Promise<void>
@@ -83,6 +88,11 @@ function nextOrderIndex(blocks: MapStateBlock[], nodeId: string): number {
   const forNode = blocks.filter((b) => b.nodeId === nodeId)
   if (forNode.length === 0) return 0
   return Math.max(...forNode.map((b) => b.orderIndex)) + 1
+}
+
+function countWords(text: string): number {
+  const trimmed = text.trim()
+  return trimmed === '' ? 0 : trimmed.split(/\s+/).length
 }
 
 export const useStore = create<SinapsisStore>((set, get) => ({
@@ -293,6 +303,99 @@ export const useStore = create<SinapsisStore>((set, get) => ({
           ...latest.state,
           media: [...latest.state.media, media],
           blocks: [...latest.state.blocks, block]
+        }
+      },
+      dirty: true
+    })
+  },
+
+  moveBlockUp: (blockId) => {
+    const current = get().currentMap
+    if (!current) return
+    const block = current.state.blocks.find((b) => b.id === blockId)
+    if (!block) return
+    const siblings = current.state.blocks
+      .filter((b) => b.nodeId === block.nodeId)
+      .sort((a, b) => a.orderIndex - b.orderIndex)
+    const index = siblings.findIndex((b) => b.id === blockId)
+    if (index <= 0) return
+    const prev = siblings[index - 1]
+    set({
+      currentMap: {
+        ...current,
+        state: {
+          ...current.state,
+          blocks: current.state.blocks.map((b) => {
+            if (b.id === block.id) return { ...b, orderIndex: prev.orderIndex }
+            if (b.id === prev.id) return { ...b, orderIndex: block.orderIndex }
+            return b
+          })
+        }
+      },
+      dirty: true
+    })
+  },
+
+  moveBlockDown: (blockId) => {
+    const current = get().currentMap
+    if (!current) return
+    const block = current.state.blocks.find((b) => b.id === blockId)
+    if (!block) return
+    const siblings = current.state.blocks
+      .filter((b) => b.nodeId === block.nodeId)
+      .sort((a, b) => a.orderIndex - b.orderIndex)
+    const index = siblings.findIndex((b) => b.id === blockId)
+    if (index === -1 || index >= siblings.length - 1) return
+    const next = siblings[index + 1]
+    set({
+      currentMap: {
+        ...current,
+        state: {
+          ...current.state,
+          blocks: current.state.blocks.map((b) => {
+            if (b.id === block.id) return { ...b, orderIndex: next.orderIndex }
+            if (b.id === next.id) return { ...b, orderIndex: block.orderIndex }
+            return b
+          })
+        }
+      },
+      dirty: true
+    })
+  },
+
+  addDocument: (nodeId, title, content, source) => {
+    const current = get().currentMap
+    if (!current) return null
+    const now = new Date().toISOString()
+    const document: MapStateDocument = {
+      id: crypto.randomUUID(),
+      nodeId,
+      title,
+      content,
+      source,
+      wordCount: countWords(content),
+      createdAt: now,
+      updatedAt: now
+    }
+    set({
+      currentMap: { ...current, state: { ...current.state, documents: [...current.state.documents, document] } },
+      dirty: true
+    })
+    return document.id
+  },
+
+  updateDocumentContent: (documentId, content) => {
+    const current = get().currentMap
+    if (!current) return
+    const now = new Date().toISOString()
+    set({
+      currentMap: {
+        ...current,
+        state: {
+          ...current.state,
+          documents: current.state.documents.map((d) =>
+            d.id === documentId ? { ...d, content, wordCount: countWords(content), updatedAt: now } : d
+          )
         }
       },
       dirty: true

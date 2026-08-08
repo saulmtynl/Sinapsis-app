@@ -330,6 +330,18 @@ button {
   font-size: 0.95rem;
 }
 
+.document-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.document-textarea {
+  width: 100%;
+  margin-top: 8px;
+}
+
 /* ---------- editing ---------- */
 
 .node-title-input {

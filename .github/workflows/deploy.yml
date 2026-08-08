@@ -26,11 +26,12 @@ jobs:
       - run: npm ci
       - run: npm run build
         env:
-          # Set this in Settings → Secrets and variables → Actions →
+          # Set these in Settings → Secrets and variables → Actions →
           # New repository secret. Safe to be visible in the built bundle
-          # (see .env.example) — this only protects it from casual repo
+          # (see .env.example) — this only protects them from casual repo
           # scraping, it's not a confidentiality boundary.
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
+          VITE_ANTHROPIC_API_KEY: ${{ secrets.VITE_ANTHROPIC_API_KEY }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

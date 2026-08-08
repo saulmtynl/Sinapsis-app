@@ -3,6 +3,21 @@ import { useStore } from '../store'
 import { NodeTree } from '../components/NodeTree'
 import { MediaPlayer } from '../components/MediaPlayer'
 import { RecordButton } from '../components/RecordButton'
+import { generateScriptForNode, hasGeneratableContent } from '../lib/scriptGeneration'
+
+function downloadTextFile(filename: string, content: string): void {
+  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+function sanitizeFilename(name: string): string {
+  return name.replace(/[\\/:*?"<>|]/g, '-').trim() || 'guion'
+}
 
 export function MapDetailScreen(): React.JSX.Element {
   const currentMap = useStore((s) => s.currentMap)
@@ -15,11 +30,15 @@ export function MapDetailScreen(): React.JSX.Element {
   const updateBlockText = useStore((s) => s.updateBlockText)
   const addTextBlock = useStore((s) => s.addTextBlock)
   const deleteBlock = useStore((s) => s.deleteBlock)
+  const addDocument = useStore((s) => s.addDocument)
+  const updateDocumentContent = useStore((s) => s.updateDocumentContent)
   const saveMap = useStore((s) => s.saveMap)
   const discardAndReload = useStore((s) => s.discardAndReload)
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [reloading, setReloading] = useState(false)
+  const [generating, setGenerating] = useState(false)
+  const [generateError, setGenerateError] = useState<string | null>(null)
 
   if (!currentMap) {
     return (
@@ -52,6 +71,22 @@ export function MapDetailScreen(): React.JSX.Element {
       await discardAndReload()
     } finally {
       setReloading(false)
+    }
+  }
+
+  async function handleGenerateScript(nodeId: string): Promise<void> {
+    if (!currentMap) return
+    setGenerating(true)
+    setGenerateError(null)
+    try {
+      const result = await generateScriptForNode(currentMap.state, nodeId)
+      if (!result.ok) {
+        setGenerateError(result.message)
+        return
+      }
+      addDocument(nodeId, result.script.title, result.script.content, 'ai_guion')
+    } finally {
+      setGenerating(false)
     }
   }
 
@@ -137,7 +172,13 @@ export function MapDetailScreen(): React.JSX.Element {
             </button>
             <RecordButton nodeId={selectedNode.id} kind="audio" />
             <RecordButton nodeId={selectedNode.id} kind="video" />
+            {hasGeneratableContent(state, selectedNode.id) && (
+              <button type="button" className="btn-ghost" disabled={generating} onClick={() => void handleGenerateScript(selectedNode.id)}>
+                {generating ? 'Generando guion…' : '✨ Generar guion'}
+              </button>
+            )}
           </div>
+          {generateError && <p className="error-text">{generateError}</p>}
 
           {state.documents.filter((d) => d.nodeId === selectedNode.id).length > 0 && (
             <div className="document-list">
@@ -146,8 +187,23 @@ export function MapDetailScreen(): React.JSX.Element {
                 .filter((d) => d.nodeId === selectedNode.id)
                 .map((doc) => (
                   <article key={doc.id} className="document-item">
-                    <h4>{doc.title}</h4>
+                    <div className="document-item-header">
+                      <h4>{doc.title}</h4>
+                      <button
+                        type="button"
+                        className="btn-ghost"
+                        onClick={() => downloadTextFile(`${sanitizeFilename(doc.title)}.txt`, doc.content)}
+                      >
+                        Descargar .txt
+                      </button>
+                    </div>
                     <p className="text-muted">{doc.wordCount} palabras</p>
+                    <textarea
+                      className="block-textarea document-textarea"
+                      value={doc.content}
+                      onChange={(e) => updateDocumentContent(doc.id, e.target.value)}
+                      rows={8}
+                    />
                   </article>
                 ))}
             </div>
