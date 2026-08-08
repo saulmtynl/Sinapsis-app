@@ -39,7 +39,22 @@ export default defineConfig({
           { src: 'icons/icon-192.svg', sizes: '192x192', type: 'image/svg+xml', purpose: 'any' },
           { src: 'icons/icon-512.svg', sizes: '512x512', type: 'image/svg+xml', purpose: 'any' },
           { src: 'icons/icon-maskable.svg', sizes: '512x512', type: 'image/svg+xml', purpose: 'maskable' }
-        ]
+        ],
+        // Milestone 2 Paso 5 — text/link only via GET (no service worker
+        // fetch handler needed for that). Sharing files (photos, audio)
+        // needs method: 'POST' plus a custom SW handler, which means
+        // switching off the current generateSW strategy — deferred until
+        // this text-only version is confirmed working, per the milestone's
+        // own "validate on Android before investing more time" guidance.
+        share_target: {
+          action: '.',
+          method: 'GET',
+          params: {
+            title: 'title',
+            text: 'text',
+            url: 'url'
+          }
+        }
       }
     })
   ]
