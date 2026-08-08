@@ -1,8 +1,8 @@
 // Minimal ambient types for the Web Speech API (SpeechRecognition). Not in
 // lib.dom.d.ts — it's still non-standard/webkit-prefixed on the browsers
 // that support it (Chrome for Android among them, our only real target per
-// M9 §6) — and no official types package exists for the four members this
-// app actually uses.
+// M9 §6) — and no official types package exists for the members this app
+// actually uses.
 export {}
 
 declare global {
@@ -39,6 +39,10 @@ declare global {
     onresult: ((event: SpeechRecognitionEvent) => void) | null
     onerror: ((event: SpeechRecognitionErrorEvent) => void) | null
     onend: (() => void) | null
+    // Fires once the mic is actually open and delivering audio to the
+    // recognizer — the key diagnostic signal for telling "recognition
+    // never got real audio" apart from "got audio, heard nothing".
+    onaudiostart: (() => void) | null
     start(): void
     stop(): void
     abort(): void

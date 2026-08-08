@@ -112,6 +112,11 @@ export function InboxRecordButton(): React.JSX.Element {
         <p className="text-muted">Este navegador no soporta transcripción automática — se guarda solo el audio.</p>
       )}
       {speech.lastError && <p className="text-muted">(diagnóstico transcripción: {speech.lastError})</p>}
+      {speech.available && !speech.transcript && (
+        <p className="text-muted">
+          (diagnóstico: audio detectado por el reconocedor: {speech.audioDetected ? 'sí' : 'no'}, reinicios: {speech.restartCount})
+        </p>
+      )}
       {saveError && <p className="error-text">{saveError}</p>}
       <div className="recorder-actions">
         <button type="button" className="btn-primary" disabled={saving} onClick={() => void confirm()}>

@@ -8,6 +8,12 @@ interface UseSpeechTranscriptionResult {
   // a generic "not available", which is otherwise impossible to diagnose
   // on a device that isn't in front of you.
   lastError: string | null
+  // True once the recognizer confirms it's actually receiving mic audio
+  // (onaudiostart). Lets the UI distinguish "never got real audio" (likely
+  // the mic being held by the concurrent MediaRecorder capture) from "got
+  // audio, transcribed nothing".
+  audioDetected: boolean
+  restartCount: number
   start: () => void
   stop: () => void
   reset: () => void
@@ -23,6 +29,8 @@ export function useSpeechTranscription(): UseSpeechTranscriptionResult {
 
   const [transcript, setTranscript] = useState('')
   const [lastError, setLastError] = useState<string | null>(null)
+  const [audioDetected, setAudioDetected] = useState(false)
+  const [restartCount, setRestartCount] = useState(0)
   const recognitionRef = useRef<SpeechRecognition | null>(null)
   const finalTextRef = useRef('')
   // Distinguishes an intentional stop() from Chrome-on-Android's
@@ -37,6 +45,8 @@ export function useSpeechTranscription(): UseSpeechTranscriptionResult {
     finalTextRef.current = ''
     setTranscript('')
     setLastError(null)
+    setAudioDetected(false)
+    setRestartCount(0)
     listeningRef.current = true
 
     const recognition = new Ctor()
@@ -55,8 +65,12 @@ export function useSpeechTranscription(): UseSpeechTranscriptionResult {
     recognition.onerror = (event) => {
       setLastError(event.error)
     }
+    recognition.onaudiostart = () => {
+      setAudioDetected(true)
+    }
     recognition.onend = () => {
       if (listeningRef.current && recognitionRef.current === recognition) {
+        setRestartCount((n) => n + 1)
         try {
           recognition.start()
         } catch {
@@ -82,7 +96,9 @@ export function useSpeechTranscription(): UseSpeechTranscriptionResult {
     finalTextRef.current = ''
     setTranscript('')
     setLastError(null)
+    setAudioDetected(false)
+    setRestartCount(0)
   }, [])
 
-  return { available, transcript, lastError, start, stop, reset }
+  return { available, transcript, lastError, audioDetected, restartCount, start, stop, reset }
 }
