@@ -1,21 +1,45 @@
 # Formato de sincronización con Google Drive (heredado del Milestone 8, app de escritorio)
 
-Referencia extraída tal cual de `Sinapsis/src/main/sync/` (commit `cffa2a7`,
-"Milestone 8: sincronizacion multi-dispositivo via Google Drive"). La PWA
-(Milestone 9) debe leer y escribir este mismo formato — no inventar uno nuevo.
+Referencia extraída tal cual de `Sinapsis/src/main/sync/`. La PWA (Milestone 9)
+debe leer y escribir el `state.json` de esta página — no inventar un formato
+nuevo — pero **no necesita replicar la estructura de carpetas por nodo**
+descripta abajo (eso es Milestone 10 de escritorio, fuera del alcance de la
+PWA por ahora; ver nota al final de esta sección).
 
-## Estructura en Drive
+## Estructura en Drive (actualizada, Milestone 10)
 
 ```
-Sinapsis/                          (carpeta raíz, una por cuenta de Google)
-  <título del mapa> (<id-corto>)/  (una carpeta por mapa, id = primeros 8 chars del uuid)
-    state.json                     (árbol completo del mapa)
-    media/                         (subcarpeta con los binarios: audio, video, imágenes)
+Sinapsis/                                    (carpeta raíz, una por cuenta de Google)
+  <título del tema_base> (<id-corto>)/       (= la carpeta del mapa; el tema_base ES un nodo más)
+    state.json                               (árbol completo del mapa — sigue siendo UN solo archivo)
+    documentos/                              (guiones/textos de ESTE nodo, como .txt)
+    audios/                                  (audio de ESTE nodo)
+    media/                                   (video/imagen de ESTE nodo)
+    <título del exponente> (<id-corto>)/     (nodo hijo — misma estructura interna, recursiva; SIN state.json propio)
+      documentos/ audios/ media/
+      <título del subtema> (<id-corto>)/
+        documentos/ audios/ media/
 ```
 
 - La carpeta raíz `Sinapsis` se busca/crea por nombre bajo `root` en el Drive del usuario.
-- El nombre de cada carpeta de mapa es `"<título saneado, máx 120 chars> (<primeros 8 chars del id>)"`,
-  para que dos mapas con el mismo título no choquen.
+- El nombre de cada carpeta de nodo (mapa incluido, ya que el mapa es su propio tema_base)
+  es `"<título saneado, máx 120 chars> (<primeros 8 chars del id>)"`, para que dos nodos con
+  el mismo título — hermanos o no — no choquen.
+- **`state.json` sigue siendo el único archivo que la app realmente lee/escribe para
+  sincronizar** — contiene el árbol completo (todos los nodos/bloques/documentos/media, plano,
+  como antes). Las carpetas por nodo y sus `documentos/`/`audios`/`media/` son una copia
+  **paralela, navegable a mano**, poblada a partir de esos mismos datos en cada sync — no una
+  fuente de verdad nueva ni un mecanismo de sync distinto.
+- **Eliminar un nodo mueve su carpeta a la papelera de Drive** (recuperable desde Drive), nunca
+  borrado permanente. Drive arrastra todo lo anidado adentro (subcarpetas, archivos, nodos
+  hijos) al mover la carpeta del nodo eliminado.
+
+**Nota para la PWA:** como la PWA solo lee `state.json` por su id de archivo directo (nunca
+necesita listar ni crear carpetas para eso), esta estructura de carpetas no le afecta en nada
+mientras siga siendo de solo lectura. Si en el futuro la PWA agrega escritura (guardado
+explícito, milestone propio), en ese momento hay que decidir si también reconcilia la
+estructura de carpetas o si eso queda exclusivamente a cargo de escritorio en su próximo sync
+— no asumir que la PWA tiene que replicar `reconcileNodeFolders` tal cual.
 
 ## `state.json` — wire format
 
@@ -50,6 +74,9 @@ interface MapStateJson {
     wordCount: number
     createdAt: string
     updatedAt: string
+    driveFileId?: string | null   // id del .txt espejo en documentos/ (Milestone 10). Opcional
+                                    // para que un state.json viejo (sin este campo) siga
+                                    // parseando — tratar ausencia como null.
   }>
   media: Array<{
     id: string
@@ -71,6 +98,8 @@ Notas de cada array:
 - **blocks**: los bloques tipo chat dentro de cada nodo (texto, referencia a audio/video/imagen
   vía `mediaId`). `textContent` es null en bloques de solo media.
 - **documents**: la pestaña de Documentos (Milestone 7) — contenido largo tipo guion/artículo.
+  `driveFileId` referencia su copia `.txt` en `documentos/` (Milestone 10); no es la fuente de
+  verdad del contenido, que sigue siendo `content` acá mismo.
 - **media**: metadata de cada archivo binario. El archivo real vive en la subcarpeta `media/`
   de Drive; `driveFileId` es el id de ese archivo. Si `driveFileId` es `null`, el archivo
   todavía no se subió (pendiente).
@@ -108,7 +137,8 @@ Notas de cada array:
 - `Sinapsis/src/main/sync/mapSync.ts` — arma y parsea el `MapStateJson` (`exportMapState` /
   `importMapState`), y la lógica de decisión de sync (`syncMapNow`: upload / download / conflict).
 - `Sinapsis/src/main/sync/driveClient.ts` — llamadas crudas a la API de Drive v3 (`uploadJson`,
-  `downloadJson`, `getFileMetadata`, `uploadFile` resumable, `createMapFolder`, `listMapFolders`).
+  `uploadText`, `downloadJson`, `getFileMetadata`, `uploadFile` resumable, `createMapRootFolder`,
+  `findOrCreateChildFolder`, `trashFile`/`renameFile`/`moveFile` (Milestone 10), `listMapFolders`).
 - `Sinapsis/src/main/sync/googleAuth.ts` — auth de escritorio (OAuth con client secret,
   loopback local). **No aplica a la PWA** — Milestone 9 usa Google Identity Services
   (token client, sin secret) en su lugar; solo el scope (`drive.file`) se reutiliza igual.
